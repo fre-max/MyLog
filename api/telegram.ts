@@ -19,14 +19,75 @@ interface TelegramMessage {
   caption?: string
 }
 
+interface TelegramUpdate {
+  update_id: number
+  message?: TelegramMessage
+}
+
 interface TelegramResponse {
   ok: boolean
-  result: { message?: TelegramMessage }[]
+  result: TelegramUpdate[]
 }
 
 interface TelegramFileResponse {
   ok: boolean
   result: { file_path: string }
+}
+
+interface WebhookInfoResponse {
+  ok: boolean
+  result: { url?: string }
+}
+
+async function verifierWebhook(token: string): Promise<string | null> {
+  const res = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`)
+  const data: WebhookInfoResponse = await res.json()
+  return data.result?.url || null
+}
+
+/**
+ * Récupère la photo la plus récente en attente dans la file Telegram.
+ * getUpdates ne fonctionne que si aucun webhook n'est configuré sur le bot.
+ */
+async function getDernierMessagePhoto(token: string): Promise<{
+  message: TelegramMessage | null
+  maxUpdateId: number
+}> {
+  const webhookUrl = await verifierWebhook(token)
+  if (webhookUrl) {
+    throw new Error(
+      'Un webhook Telegram est actif sur ce bot. Ouvrez https://api.telegram.org/bot<VOTRE_TOKEN>/deleteWebhook dans le navigateur pour activer le Quick Entry.'
+    )
+  }
+
+  const updatesRes = await fetch(
+    `https://api.telegram.org/bot${token}/getUpdates?limit=100&allowed_updates=${encodeURIComponent('["message"]')}`
+  )
+  const updates: TelegramResponse = await updatesRes.json()
+
+  if (!updates.ok || !updates.result?.length) {
+    return { message: null, maxUpdateId: 0 }
+  }
+
+  let dernierMessage: TelegramMessage | null = null
+  let maxUpdateId = 0
+
+  for (const update of updates.result) {
+    maxUpdateId = Math.max(maxUpdateId, update.update_id)
+    const msg = update.message
+    if (!msg?.photo?.length) continue
+    if (!dernierMessage || msg.message_id > dernierMessage.message_id) {
+      dernierMessage = msg
+    }
+  }
+
+  return { message: dernierMessage, maxUpdateId }
+}
+
+async function acquitterUpdates(token: string, maxUpdateId: number): Promise<void> {
+  if (maxUpdateId > 0) {
+    await fetch(`https://api.telegram.org/bot${token}/getUpdates?offset=${maxUpdateId + 1}`)
+  }
 }
 
 async function analyserImageAvecGemini(imageUrl: string): Promise<Record<string, unknown>> {
@@ -80,15 +141,15 @@ export default {
     try {
       console.log('📡 [Telegram API] Récupération du dernier message Telegram...')
 
-      const updatesRes = await fetch(
-        `https://api.telegram.org/bot${token}/getUpdates?limit=1&offset=-1`
-      )
-      const updates: TelegramResponse = await updatesRes.json()
-
-      const message = updates.result?.[0]?.message
+      const { message, maxUpdateId } = await getDernierMessagePhoto(token)
       if (!message?.photo?.length) {
         console.log('❌ [Telegram API] Aucune image récente trouvée dans le bot')
-        return jsonResponse({ error: 'Aucune image trouvée dans le bot' }, 404)
+        // Libère les messages texte en attente pour ne pas bloquer la file
+        await acquitterUpdates(token, maxUpdateId)
+        return jsonResponse({
+          error: 'Aucune image en attente. Envoie d\'abord une capture au bot Telegram, puis clique à nouveau sur le bouton.',
+          hint: 'Envoie une photo avec la légende "quick" pour un Quick Entry automatique.',
+        }, 422)
       }
 
       const photo = message.photo[message.photo.length - 1]
@@ -112,6 +173,7 @@ export default {
         const authHeader = request.headers.get('authorization')
         if (!authHeader || !supabaseUrl || !supabaseAnonKey) {
           console.log('⚠️ [Telegram API] Pas d\'en-tête d\'autorisation, renvoi des données pour création client')
+          await acquitterUpdates(token, maxUpdateId)
           return jsonResponse({
             mode: 'quick_fallback',
             fileUrl,
@@ -191,6 +253,7 @@ export default {
 
         console.log('✅ [Telegram API] Trade rapide et étape créés en BDD. ID Trade :', insertedTrade.id)
 
+        await acquitterUpdates(token, maxUpdateId)
         return jsonResponse({
           mode: 'quick',
           tradeId: insertedTrade.id,
@@ -204,6 +267,7 @@ export default {
         console.log('🚀 [Telegram API] Mode Analyse seule détecté')
         const analysisData = await analyserImageAvecGemini(fileUrl)
 
+        await acquitterUpdates(token, maxUpdateId)
         return jsonResponse({
           mode: 'analyse',
           fileUrl,
@@ -213,6 +277,7 @@ export default {
       }
 
       console.log('🚀 [Telegram API] Mode Standard détecté (stockage d\'image simple)')
+      await acquitterUpdates(token, maxUpdateId)
       return jsonResponse({
         mode: 'standard',
         fileUrl,
