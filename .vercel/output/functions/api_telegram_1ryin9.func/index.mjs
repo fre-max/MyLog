@@ -25,6 +25,34 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __hasOwnProp.call(mod, "module.exports") ? mod["module.exports"] : __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 //#endregion
+//#region .vercel/output/assets/_utils-ClIy0be_.js
+function jsonResponse(body, status = 200) {
+	return Response.json(body, { status });
+}
+var SMC_ANALYSIS_PROMPT = `Tu es un assistant spécialisé en analyse de trades SMC (Smart Money Concepts).
+Analyse ce screenshot TradingView et extrais les informations suivantes en JSON.
+La position est toujours ouverte et visible sur le chart.
+
+Retourne UNIQUEMENT ce JSON, sans texte supplémentaire :
+{
+  "pair": "paire tradée (ex: XAUUSD, EURUSD...)",
+  "direction": "long ou short",
+  "entry_price": nombre ou null,
+  "sl": nombre ou null,
+  "tp": nombre ou null,
+  "timeframe": "timeframe visible (ex: M15, H1...)",
+  "session": "Asian, London, NY ou London/NY selon l'heure visible, ou null",
+  "rr": nombre calculé depuis entrée/SL/TP ou null,
+  "patterns": ["patterns SMC visibles si annotés sur le chart"],
+  "confidence": {
+    "pair": 0.0 à 1.0,
+    "direction": 0.0 à 1.0,
+    "entry_price": 0.0 à 1.0,
+    "sl": 0.0 à 1.0,
+    "tp": 0.0 à 1.0
+  }
+}`;
+//#endregion
 //#region node_modules/.pnpm/@google+generative-ai@0.24.1/node_modules/@google/generative-ai/dist/index.mjs
 /**
 * Contains the list of OpenAPI data types
@@ -24121,12 +24149,8 @@ if (shouldShowDeprecationWarning()) console.warn("⚠️  Node.js 18 and below a
 //#region .vercel/output/functions/api_telegram_1ryin9.func/index.js
 var geminiApiKey = process.env.GEMINI_API_KEY;
 var genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
-var supabaseUrl = process.env.VITE_SUPABASE_URL;
-var supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
-/**
-* Fonction d'aide interne pour télécharger une image et l'analyser avec Gemini Vision.
-* Exécute le prompt structuré SMC.
-*/
+var supabaseUrl = process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL;
+var supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY;
 async function analyserImageAvecGemini(imageUrl) {
 	if (!genAI) throw new Error("Clé API Gemini non configurée sur le serveur");
 	const imageRes = await fetch(imageUrl);
@@ -24134,29 +24158,7 @@ async function analyserImageAvecGemini(imageUrl) {
 	const contentType = imageRes.headers.get("content-type") || "image/jpeg";
 	const arrayBuffer = await imageRes.arrayBuffer();
 	const base64Image = Buffer.from(arrayBuffer).toString("base64");
-	const jsonMatch = (await genAI.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent([`Tu es un assistant spécialisé en analyse de trades SMC (Smart Money Concepts).
-Analyse ce screenshot TradingView et extrais les informations suivantes en JSON.
-La position est toujours ouverte et visible sur le chart.
-
-Retourne UNIQUEMENT ce JSON, sans texte supplémentaire :
-{
-  "pair": "paire tradée (ex: XAUUSD, EURUSD...)",
-  "direction": "long ou short",
-  "entry_price": nombre ou null,
-  "sl": nombre ou null,
-  "tp": nombre ou null,
-  "timeframe": "timeframe visible (ex: M15, H1...)",
-  "session": "Asian, London, NY ou London/NY selon l'heure visible, ou null",
-  "rr": nombre calculé depuis entrée/SL/TP ou null,
-  "patterns": ["patterns SMC visibles si annotés sur le chart"],
-  "confidence": {
-    "pair": 0.0 à 1.0,
-    "direction": 0.0 à 1.0,
-    "entry_price": 0.0 à 1.0,
-    "sl": 0.0 à 1.0,
-    "tp": 0.0 à 1.0
-  }
-}`, { inlineData: {
+	const jsonMatch = (await genAI.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent([SMC_ANALYSIS_PROMPT, { inlineData: {
 		data: base64Image,
 		mimeType: contentType
 	} }])).response.text().match(/\{[\s\S]*\}/);
@@ -24164,31 +24166,32 @@ Retourne UNIQUEMENT ce JSON, sans texte supplémentaire :
 	return JSON.parse(jsonMatch[0]);
 }
 /**
-* Handler principal pour l'API Telegram.
-* Lit le dernier message du bot, extrait l'image et la caption, et applique le routage.
+* Lit le dernier message du bot Telegram, extrait l'image et route selon la caption.
 */
-async function handler(req, res) {
-	if (req.method !== "GET") return res.status(405).json({ error: "Méthode non autorisée" });
+var telegram_default = { async fetch(request) {
+	if (request.method !== "GET") return jsonResponse({ error: "Méthode non autorisée" }, 405);
 	const token = process.env.TELEGRAM_BOT_TOKEN;
-	if (!token) return res.status(500).json({ error: "Token du bot Telegram non configuré" });
+	if (!token) return jsonResponse({ error: "Token du bot Telegram non configuré" }, 500);
 	try {
 		console.log("📡 [Telegram API] Récupération du dernier message Telegram...");
 		const message = (await (await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=1&offset=-1`)).json()).result?.[0]?.message;
 		if (!message?.photo?.length) {
 			console.log("❌ [Telegram API] Aucune image récente trouvée dans le bot");
-			return res.status(404).json({ error: "Aucune image trouvée dans le bot" });
+			return jsonResponse({ error: "Aucune image trouvée dans le bot" }, 404);
 		}
 		const photo = message.photo[message.photo.length - 1];
-		const fileUrl = `https://api.telegram.org/file/bot${token}/${(await (await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${photo.file_id}`)).json()).result.file_path}`;
+		const fileData = await (await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${photo.file_id}`)).json();
+		if (!fileData.ok || !fileData.result?.file_path) throw new Error("Impossible de récupérer le fichier Telegram");
+		const fileUrl = `https://api.telegram.org/file/bot${token}/${fileData.result.file_path}`;
 		const caption = (message.caption || "").toLowerCase().trim();
 		console.log("✅ [Telegram API] Image trouvée. Caption :", caption || "(aucune)");
 		if (caption === "q" || caption === "quick") {
 			console.log("🚀 [Telegram API] Mode Quick Entry détecté");
 			const analysisData = await analyserImageAvecGemini(fileUrl);
-			const authHeader = req.headers.authorization;
+			const authHeader = request.headers.get("authorization");
 			if (!authHeader || !supabaseUrl || !supabaseAnonKey) {
 				console.log("⚠️ [Telegram API] Pas d'en-tête d'autorisation, renvoi des données pour création client");
-				return res.status(200).json({
+				return jsonResponse({
 					mode: "quick_fallback",
 					fileUrl,
 					analysis: analysisData,
@@ -24206,7 +24209,7 @@ async function handler(req, res) {
 				date_backtested: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
 				entry_time: null,
 				result: null,
-				rr_planned: analysisData.rr ? parseFloat(analysisData.rr) : null,
+				rr_planned: analysisData.rr ? parseFloat(String(analysisData.rr)) : null,
 				rr_realized: null,
 				exit_type: null,
 				emotion: null,
@@ -24235,7 +24238,7 @@ async function handler(req, res) {
 			});
 			if (imageInsertError) console.error("❌ [Telegram API] Erreur lors de l'enregistrement de l'image :", imageInsertError);
 			console.log("✅ [Telegram API] Trade rapide et étape créés en BDD. ID Trade :", insertedTrade.id);
-			return res.status(200).json({
+			return jsonResponse({
 				mode: "quick",
 				tradeId: insertedTrade.id,
 				analysis: analysisData,
@@ -24245,25 +24248,25 @@ async function handler(req, res) {
 		}
 		if (caption === "a" || caption === "analyse") {
 			console.log("🚀 [Telegram API] Mode Analyse seule détecté");
-			const analysisData = await analyserImageAvecGemini(fileUrl);
-			return res.status(200).json({
+			return jsonResponse({
 				mode: "analyse",
 				fileUrl,
-				analysis: analysisData,
+				analysis: await analyserImageAvecGemini(fileUrl),
 				date: message.date
 			});
 		}
 		console.log("🚀 [Telegram API] Mode Standard détecté (stockage d'image simple)");
-		return res.status(200).json({
+		return jsonResponse({
 			mode: "standard",
 			fileUrl,
 			date: message.date
 		});
 	} catch (error) {
+		const message = error instanceof Error ? error.message : "Erreur lors du traitement du message Telegram";
 		console.error("❌ [Telegram API] Erreur générale :", error);
-		return res.status(500).json({ error: error.message || "Erreur lors du traitement du message Telegram" });
+		return jsonResponse({ error: message }, 500);
 	}
-}
+} };
 function getOriginalRequest(request) {
 	const xOriginalPath = request.headers.get("x-original-path");
 	let newUrl = null;
@@ -24291,12 +24294,12 @@ function getOriginalRequest(request) {
 	}
 	return newRequest;
 }
-if (handler?.fetch) {
-	const ori = handler.fetch;
-	handler.fetch = (r) => {
+if (telegram_default?.fetch) {
+	const ori = telegram_default.fetch;
+	telegram_default.fetch = (r) => {
 		return ori(getOriginalRequest(r));
 	};
 }
-var def = handler?.server?.nodeHandler ?? handler;
+var def = telegram_default?.server?.nodeHandler ?? telegram_default;
 //#endregion
 export { def as default };

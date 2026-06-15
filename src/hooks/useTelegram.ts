@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { supabase } from '@/lib/supabase'
 import type { GeminiAnalysis } from './useQuickEntry'
 
 // ─── Types pour l'état interne du hook ───────────────────────────────────────
@@ -43,18 +44,31 @@ export function useTelegram() {
 
     try {
       console.log('📡 [useTelegram] Appel de /api/telegram...')
-      const res = await fetch('/api/telegram')
-      
+
+      const { data: { session } } = await supabase.auth.getSession()
+      const headers: HeadersInit = {}
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`
+      }
+
+      const res = await fetch('/api/telegram', { headers })
+
       console.log(`📡 [useTelegram] Statut réponse : ${res.status} ${res.statusText}`)
       const contentType = res.headers.get('content-type')
       console.log(`📡 [useTelegram] Content-Type : ${contentType}`)
 
-      if (!res.ok) {
-        throw new Error(`Erreur HTTP ${res.status} lors de l'appel à /api/telegram`)
-      }
-
-      // Lire d'abord sous forme de texte pour pouvoir logger si ce n'est pas du JSON
       const text = await res.text()
+
+      if (!res.ok) {
+        let serverMessage = text
+        try {
+          const errBody = JSON.parse(text) as { error?: string }
+          if (errBody.error) serverMessage = errBody.error
+        } catch {
+          // garder le texte brut
+        }
+        throw new Error(serverMessage || `Erreur HTTP ${res.status}`)
+      }
       console.log('📡 [useTelegram] Réponse brute reçue (premiers 200 caractères) :', text.substring(0, 200))
 
       let data

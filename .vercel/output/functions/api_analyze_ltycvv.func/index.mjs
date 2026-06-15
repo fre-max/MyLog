@@ -1,3 +1,31 @@
+//#region .vercel/output/assets/_utils-ClIy0be_.js
+function jsonResponse(body, status = 200) {
+	return Response.json(body, { status });
+}
+var SMC_ANALYSIS_PROMPT = `Tu es un assistant spécialisé en analyse de trades SMC (Smart Money Concepts).
+Analyse ce screenshot TradingView et extrais les informations suivantes en JSON.
+La position est toujours ouverte et visible sur le chart.
+
+Retourne UNIQUEMENT ce JSON, sans texte supplémentaire :
+{
+  "pair": "paire tradée (ex: XAUUSD, EURUSD...)",
+  "direction": "long ou short",
+  "entry_price": nombre ou null,
+  "sl": nombre ou null,
+  "tp": nombre ou null,
+  "timeframe": "timeframe visible (ex: M15, H1...)",
+  "session": "Asian, London, NY ou London/NY selon l'heure visible, ou null",
+  "rr": nombre calculé depuis entrée/SL/TP ou null,
+  "patterns": ["patterns SMC visibles si annotés sur le chart"],
+  "confidence": {
+    "pair": 0.0 à 1.0,
+    "direction": 0.0 à 1.0,
+    "entry_price": 0.0 à 1.0,
+    "sl": 0.0 à 1.0,
+    "tp": 0.0 à 1.0
+  }
+}`;
+//#endregion
 //#region node_modules/.pnpm/@google+generative-ai@0.24.1/node_modules/@google/generative-ai/dist/index.mjs
 /**
 * Contains the list of OpenAPI data types
@@ -1271,72 +1299,33 @@ var apiKey = process.env.GEMINI_API_KEY;
 var genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 /**
 * Analyse une capture d'écran de graphique pour en extraire des données de trade SMC.
-* 
+*
 * Requête attendue : GET /api/analyze?url=https://...
-* Réponse : JSON contenant les informations extraites par Gemini Vision
 */
-async function handler(req, res) {
-	if (req.method !== "GET") {
-		console.log("❌ [Analyze API] Méthode non autorisée :", req.method);
-		return res.status(405).json({ error: "Méthode non autorisée" });
-	}
-	const imageUrl = req.query.url;
-	if (!imageUrl) {
-		console.log("❌ [Analyze API] URL de l'image manquante dans la requête");
-		return res.status(400).json({ error: "URL de l'image manquante (paramètre url requis)" });
-	}
-	if (!genAI) {
-		console.log("❌ [Analyze API] GEMINI_API_KEY non configurée dans l'environnement");
-		return res.status(500).json({ error: "Clé API Gemini non configurée sur le serveur" });
-	}
+var analyze_default = { async fetch(request) {
+	if (request.method !== "GET") return jsonResponse({ error: "Méthode non autorisée" }, 405);
+	const imageUrl = new URL(request.url).searchParams.get("url");
+	if (!imageUrl) return jsonResponse({ error: "URL de l'image manquante (paramètre url requis)" }, 400);
+	if (!genAI) return jsonResponse({ error: "Clé API Gemini non configurée sur le serveur" }, 500);
 	try {
-		console.log("📡 [Analyze API] Téléchargement de l'image depuis l'URL...", imageUrl);
 		const imageRes = await fetch(imageUrl);
 		if (!imageRes.ok) throw new Error(`Échec du téléchargement de l'image (Statut HTTP : ${imageRes.status})`);
 		const contentType = imageRes.headers.get("content-type") || "image/jpeg";
 		const arrayBuffer = await imageRes.arrayBuffer();
 		const base64Image = Buffer.from(arrayBuffer).toString("base64");
-		console.log("✅ [Analyze API] Téléchargement et conversion base64 réussis. Taille :", arrayBuffer.byteLength, "octets");
-		const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-		const prompt = `Tu es un assistant spécialisé en analyse de trades SMC (Smart Money Concepts).
-Analyse ce screenshot TradingView et extrais les informations suivantes en JSON.
-La position est toujours ouverte et visible sur le chart.
-
-Retourne UNIQUEMENT ce JSON, sans texte supplémentaire :
-{
-  "pair": "paire tradée (ex: XAUUSD, EURUSD...)",
-  "direction": "long ou short",
-  "entry_price": nombre ou null,
-  "sl": nombre ou null,
-  "tp": nombre ou null,
-  "timeframe": "timeframe visible (ex: M15, H1...)",
-  "session": "Asian, London, NY ou London/NY selon l'heure visible, ou null",
-  "rr": nombre calculé depuis entrée/SL/TP ou null,
-  "patterns": ["patterns SMC visibles si annotés sur le chart"],
-  "confidence": {
-    "pair": 0.0 à 1.0,
-    "direction": 0.0 à 1.0,
-    "entry_price": 0.0 à 1.0,
-    "sl": 0.0 à 1.0,
-    "tp": 0.0 à 1.0
-  }
-}`;
-		console.log("📡 [Analyze API] Appel du modèle gemini-1.5-flash...");
-		const responseText = (await model.generateContent([prompt, { inlineData: {
+		const responseText = (await genAI.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent([SMC_ANALYSIS_PROMPT, { inlineData: {
 			data: base64Image,
 			mimeType: contentType
 		} }])).response.text();
-		console.log("✅ [Analyze API] Réponse brute de Gemini reçue");
 		const jsonMatch = responseText.match(/\{[\s\S]*\}/);
 		if (!jsonMatch) throw new Error(`La réponse de l'IA ne contient pas un objet JSON valide. Réponse brute : ${responseText}`);
-		const data = JSON.parse(jsonMatch[0]);
-		console.log("✅ [Analyze API] JSON parsé avec succès :", data);
-		return res.status(200).json(data);
+		return jsonResponse(JSON.parse(jsonMatch[0]));
 	} catch (error) {
+		const message = error instanceof Error ? error.message : "Erreur interne lors de l'analyse de l'image";
 		console.error("❌ [Analyze API] Erreur d'analyse :", error);
-		return res.status(500).json({ error: error.message || "Erreur interne lors de l'analyse de l'image" });
+		return jsonResponse({ error: message }, 500);
 	}
-}
+} };
 function getOriginalRequest(request) {
 	const xOriginalPath = request.headers.get("x-original-path");
 	let newUrl = null;
@@ -1364,12 +1353,12 @@ function getOriginalRequest(request) {
 	}
 	return newRequest;
 }
-if (handler?.fetch) {
-	const ori = handler.fetch;
-	handler.fetch = (r) => {
+if (analyze_default?.fetch) {
+	const ori = analyze_default.fetch;
+	analyze_default.fetch = (r) => {
 		return ori(getOriginalRequest(r));
 	};
 }
-var def = handler?.server?.nodeHandler ?? handler;
+var def = analyze_default?.server?.nodeHandler ?? analyze_default;
 //#endregion
 export { def as default };
