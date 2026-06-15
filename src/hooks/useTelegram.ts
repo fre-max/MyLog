@@ -44,10 +44,29 @@ export function useTelegram() {
     try {
       console.log('📡 [useTelegram] Appel de /api/telegram...')
       const res = await fetch('/api/telegram')
-      if (!res.ok) throw new Error('Aucune image trouvée dans le bot Telegram')
+      
+      console.log(`📡 [useTelegram] Statut réponse : ${res.status} ${res.statusText}`)
+      const contentType = res.headers.get('content-type')
+      console.log(`📡 [useTelegram] Content-Type : ${contentType}`)
 
-      const data = await res.json()
-      console.log('✅ [useTelegram] Réponse reçue, mode :', data.mode)
+      if (!res.ok) {
+        throw new Error(`Erreur HTTP ${res.status} lors de l'appel à /api/telegram`)
+      }
+
+      // Lire d'abord sous forme de texte pour pouvoir logger si ce n'est pas du JSON
+      const text = await res.text()
+      console.log('📡 [useTelegram] Réponse brute reçue (premiers 200 caractères) :', text.substring(0, 200))
+
+      let data
+      try {
+        data = JSON.parse(text)
+      } catch (parseError) {
+        console.error('❌ [useTelegram] Échec du parsing JSON de la réponse !')
+        console.error('❌ [useTelegram] Contenu non-JSON reçu :', text)
+        throw new Error(`La réponse du serveur n'est pas un JSON valide (reçu: ${text.substring(0, 50)}...)`)
+      }
+
+      console.log('✅ [useTelegram] Réponse JSON parsée avec succès, mode :', data.mode)
 
       const nouvelEtat: TelegramState = {
         isLoading: false,
@@ -61,6 +80,7 @@ export function useTelegram() {
       return nouvelEtat
 
     } catch (err) {
+      console.error('❌ [useTelegram] Erreur attrapée dans fetchLastMessage :', err)
       const message = err instanceof Error ? err.message : 'Erreur inconnue'
       const etatErreur: TelegramState = {
         isLoading: false,
