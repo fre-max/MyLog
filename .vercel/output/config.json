@@ -21,6 +21,19 @@
         "Location": "/$1"
       },
       "status": 308
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "^/api/analyze$",
+      "dest": "/api_analyze_ltycvv",
+      "check": true
+    },
+    {
+      "src": "^/api/telegram$",
+      "dest": "/api_telegram_1ryin9",
+      "check": true
     }
   ],
   "overrides": {}
