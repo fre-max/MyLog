@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@supabase/supabase-js'
-import { jsonResponse, SMC_ANALYSIS_PROMPT } from './_utils'
+import { GEMINI_VISION_MODEL, jsonResponse, SMC_ANALYSIS_PROMPT } from './_utils'
 
 const geminiApiKey = process.env.GEMINI_API_KEY
 const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null
@@ -90,6 +90,65 @@ async function acquitterUpdates(token: string, maxUpdateId: number): Promise<voi
   }
 }
 
+interface TelegramBotInfo {
+  id: number
+  username: string
+  first_name: string
+}
+
+interface TelegramMeResponse {
+  ok: boolean
+  result: TelegramBotInfo
+}
+
+/**
+ * Teste la connexion au bot sans appeler Gemini ni consommer la file de messages.
+ * GET /api/telegram?ping=1
+ */
+async function testerConnexionBot(token: string): Promise<Response> {
+  const meRes = await fetch(`https://api.telegram.org/bot${token}/getMe`)
+  const meData: TelegramMeResponse = await meRes.json()
+
+  if (!meData.ok) {
+    return jsonResponse({ mode: 'ping', ok: false, error: 'Token Telegram invalide' }, 401)
+  }
+
+  const webhookUrl = await verifierWebhook(token)
+
+  const updatesRes = await fetch(
+    `https://api.telegram.org/bot${token}/getUpdates?limit=100&allowed_updates=${encodeURIComponent('["message"]')}`
+  )
+  const updates: TelegramResponse = await updatesRes.json()
+
+  const pendingUpdates = updates.result?.length ?? 0
+  let pendingPhotos = 0
+  for (const update of updates.result ?? []) {
+    if (update.message?.photo?.length) pendingPhotos++
+  }
+
+  return jsonResponse({
+    mode: 'ping',
+    ok: true,
+    bot: {
+      id: meData.result.id,
+      username: meData.result.username,
+      name: meData.result.first_name,
+    },
+    webhook: {
+      active: Boolean(webhookUrl),
+      url: webhookUrl,
+    },
+    queue: {
+      pendingUpdates,
+      pendingPhotos,
+    },
+    gemini: {
+      configured: Boolean(genAI),
+      model: GEMINI_VISION_MODEL,
+    },
+  })
+}
+
 async function analyserImageAvecGemini(imageUrl: string): Promise<Record<string, unknown>> {
   if (!genAI) {
     throw new Error('Clé API Gemini non configurée sur le serveur')
@@ -104,7 +163,7 @@ async function analyserImageAvecGemini(imageUrl: string): Promise<Record<string,
   const arrayBuffer = await imageRes.arrayBuffer()
   const base64Image = Buffer.from(arrayBuffer).toString('base64')
 
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const model = genAI.getGenerativeModel({ model: GEMINI_VISION_MODEL })
   const result = await model.generateContent([
     SMC_ANALYSIS_PROMPT,
     {
@@ -136,6 +195,11 @@ export default {
     const token = process.env.TELEGRAM_BOT_TOKEN
     if (!token) {
       return jsonResponse({ error: 'Token du bot Telegram non configuré' }, 500)
+    }
+
+    const url = new URL(request.url)
+    if (url.searchParams.get('ping') === '1' || url.searchParams.get('test') === '1') {
+      return testerConnexionBot(token)
     }
 
     try {

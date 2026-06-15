@@ -4,7 +4,16 @@ import type { GeminiAnalysis } from './useQuickEntry'
 
 // ─── Types pour l'état interne du hook ───────────────────────────────────────
 
-export type TelegramMode = 'standard' | 'analyse' | 'quick' | 'quick_fallback' | null
+export type TelegramMode = 'standard' | 'analyse' | 'quick' | 'quick_fallback' | 'ping' | null
+
+export interface TelegramPingResult {
+  ok: boolean
+  bot?: { id: number; username: string; name: string }
+  webhook?: { active: boolean; url: string | null }
+  queue?: { pendingUpdates: number; pendingPhotos: number }
+  gemini?: { configured: boolean; model: string }
+  error?: string
+}
 
 interface TelegramState {
   isLoading: boolean
@@ -123,10 +132,32 @@ export function useTelegram() {
     setState({ isLoading: false, preview: null, error: null, mode: null, analysis: null })
   }
 
+  // Teste la connexion au bot sans consommer de message ni appeler Gemini
+  const testBotConnection = async (): Promise<TelegramPingResult> => {
+    setState((prev) => ({ ...prev, isLoading: true, error: null }))
+
+    try {
+      const res = await fetch('/api/telegram?ping=1')
+      const data = await res.json() as TelegramPingResult & { mode?: string }
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || `Erreur HTTP ${res.status}`)
+      }
+
+      setState((prev) => ({ ...prev, isLoading: false, error: null, mode: 'ping' }))
+      return data
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erreur inconnue'
+      setState((prev) => ({ ...prev, isLoading: false, error: message }))
+      return { ok: false, error: message }
+    }
+  }
+
   return {
     ...state,
     fetchLastMessage,
     fetchLastImage,  // Rétrocompatibilité avec ImageField.tsx
+    testBotConnection,
     clearPreview,
   }
 }

@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils'
  * Affiche une modale de résumé après l'action.
  */
 export function TelegramButton() {
-  const { fetchLastMessage, isLoading: telegramLoading } = useTelegram()
+  const { fetchLastMessage, testBotConnection, isLoading: telegramLoading } = useTelegram()
   const { mutateAsync: creerQuickEntry, isPending: quickEntryPending } = useQuickEntry()
   const addToast = useUIStore((state) => state.addToast)
   const openNewTrade = useUIStore((state) => state.openNewTrade)
@@ -30,7 +30,6 @@ export function TelegramButton() {
     console.log('📱 [TelegramButton] Vérification du dernier message Telegram...')
     setShowResultat(false)
 
-    // 1️⃣ Appeler /api/telegram pour récupérer le dernier message
     const etat = await fetchLastMessage()
 
     if (etat.error || !etat.preview) {
@@ -38,7 +37,6 @@ export function TelegramButton() {
       return
     }
 
-    // 2️⃣ Routage selon le mode retourné par le serveur
     if ((etat.mode === 'quick' || etat.mode === 'quick_fallback') && etat.analysis) {
       try {
         // Créer le trade automatiquement via le hook useQuickEntry
@@ -68,9 +66,35 @@ export function TelegramButton() {
       console.log('ℹ️ [TelegramButton] Mode analyse, formulaire ouvert. Données IA :', etat.analysis)
 
     } else {
-      // Mode standard : image simple, rien à faire de plus
-      addToast('Image Telegram récupérée (pas de caption de commande)', 'info')
+      addToast('Image Telegram récupérée — liaison OK (sans analyse IA)', 'success')
     }
+  }
+
+  const handleTestConnexion = async () => {
+    setShowResultat(false)
+    const statut = await testBotConnection()
+
+    if (!statut.ok || !statut.bot) {
+      addToast(statut.error || 'Connexion au bot impossible', 'error')
+      return
+    }
+
+    const webhookMsg = statut.webhook?.active
+      ? '⚠️ Webhook actif — désactive-le pour le Quick Entry'
+      : '✓ Polling OK'
+
+    addToast(
+      `Bot @${statut.bot.username} connecté — ${statut.queue?.pendingPhotos ?? 0} photo(s) en attente — ${webhookMsg}`,
+      statut.webhook?.active ? 'info' : 'success'
+    )
+  }
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (e.shiftKey) {
+      void handleTestConnexion()
+      return
+    }
+    void handleCheck()
   }
 
   return (
@@ -78,9 +102,9 @@ export function TelegramButton() {
       {/* ─── Bouton flottant ──────────────────────────────────── */}
       <button
         id="telegram-quick-entry-btn"
-        onClick={handleCheck}
+        onClick={handleClick}
         disabled={enChargement}
-        title="Vérifier le bot Telegram (Quick Entry)"
+        title="Cliquer = récupérer la dernière photo | Shift+clic = tester la connexion"
         className={cn(
           'fixed bottom-6 right-6 z-[80]',
           'flex items-center gap-2 px-4 py-3 rounded-full shadow-xl',

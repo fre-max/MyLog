@@ -2,6 +2,9 @@ export function jsonResponse(body: unknown, status = 200): Response {
   return Response.json(body, { status })
 }
 
+/** Modèle Gemini pour la vision (configurable via GEMINI_MODEL sur Vercel) */
+export const GEMINI_VISION_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash'
+
 export const SMC_ANALYSIS_PROMPT = `Tu es un assistant spécialisé en analyse de trades SMC (Smart Money Concepts).
 Analyse ce screenshot TradingView et extrais les informations suivantes en JSON.
 La position est toujours ouverte et visible sur le chart.
