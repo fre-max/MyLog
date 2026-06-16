@@ -1,5 +1,5 @@
 import type { GoogleGenerativeAI } from '@google/generative-ai'
-import sharp from 'sharp'
+import { Jimp } from 'jimp'
 import { getGeminiVisionModel, SMC_ANALYSIS_PROMPT } from './_utils'
 
 const MAX_IMAGE_WIDTH = 1024
@@ -25,11 +25,17 @@ export async function optimiserImagePourGemini(input: Buffer): Promise<{
 }> {
   const originalBytes = input.byteLength
 
-  const optimized = await sharp(input)
-    .rotate()
-    .resize({ width: MAX_IMAGE_WIDTH, withoutEnlargement: true })
-    .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
-    .toBuffer()
+  const image = await Jimp.read(input)
+
+  if (image.width > MAX_IMAGE_WIDTH) {
+    const ratio = MAX_IMAGE_WIDTH / image.width
+    image.resize({
+      w: MAX_IMAGE_WIDTH,
+      h: Math.max(1, Math.round(image.height * ratio)),
+    })
+  }
+
+  const optimized = await image.getBuffer('image/jpeg', { quality: JPEG_QUALITY })
 
   console.log(
     `🖼️ [Gemini] Image optimisée : ${originalBytes} → ${optimized.byteLength} octets (-${Math.round((1 - optimized.byteLength / originalBytes) * 100)}%)`

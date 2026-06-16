@@ -22,18 +22,5 @@ export default defineConfig(async () => {
         '@': path.resolve(__dirname, './src'),
       },
     },
-    // sharp utilise des binaires natifs — ne pas bundler dans les fonctions Vercel
-    ssr: {
-      external: ['sharp'],
-    },
-    environments: {
-      vercel_node: {
-        build: {
-          rollupOptions: {
-            external: ['sharp', /^@img\/sharp-/],
-          },
-        },
-      },
-    },
   }
 })

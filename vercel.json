@@ -1,4 +1,3 @@
 {
-  "buildCommand": "npm run build",
-  "installCommand": "npm install --include=optional && npm install --os=linux --cpu=x64 sharp"
+  "buildCommand": "npm run build"
 }
