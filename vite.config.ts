@@ -14,6 +14,7 @@ export default defineConfig(async () => {
       react(),
       vercel({
         entries,
+        defaultMaxDuration: 60,
       }),
     ],
     resolve: {

@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@supabase/supabase-js'
-import { getGeminiVisionModel, jsonResponse, SMC_ANALYSIS_PROMPT } from './_utils'
+import { analyserImageUrlAvecGemini, isGeminiQuotaError, messageErreurQuotaGemini } from './_gemini'
+import { getGeminiVisionModel, jsonResponse } from './_utils'
 
 const geminiApiKey = process.env.GEMINI_API_KEY
 const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null
@@ -153,34 +154,7 @@ async function analyserImageAvecGemini(imageUrl: string): Promise<Record<string,
   if (!genAI) {
     throw new Error('Clé API Gemini non configurée sur le serveur')
   }
-
-  const imageRes = await fetch(imageUrl)
-  if (!imageRes.ok) {
-    throw new Error(`Échec du téléchargement de l'image Telegram (${imageRes.status})`)
-  }
-
-  const contentType = imageRes.headers.get('content-type') || 'image/jpeg'
-  const arrayBuffer = await imageRes.arrayBuffer()
-  const base64Image = Buffer.from(arrayBuffer).toString('base64')
-
-  const model = genAI.getGenerativeModel({ model: getGeminiVisionModel() })
-  const result = await model.generateContent([
-    SMC_ANALYSIS_PROMPT,
-    {
-      inlineData: {
-        data: base64Image,
-        mimeType: contentType,
-      },
-    },
-  ])
-
-  const responseText = result.response.text()
-  const jsonMatch = responseText.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) {
-    throw new Error('Gemini n\'a pas retourné de JSON valide')
-  }
-
-  return JSON.parse(jsonMatch[0])
+  return analyserImageUrlAvecGemini(genAI, imageUrl)
 }
 
 /**
@@ -348,6 +322,10 @@ export default {
         date: message.date,
       })
     } catch (error: unknown) {
+      if (isGeminiQuotaError(error)) {
+        console.error('❌ [Telegram API] Quota Gemini Free Tier :', error)
+        return jsonResponse({ error: messageErreurQuotaGemini(error) }, 429)
+      }
       const message = error instanceof Error ? error.message : 'Erreur lors du traitement du message Telegram'
       console.error('❌ [Telegram API] Erreur générale :', error)
       return jsonResponse({ error: message }, 500)

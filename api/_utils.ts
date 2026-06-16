@@ -1,28 +1,33 @@
 export function jsonResponse(body: unknown, status = 200): Response {
-  return Response.json(body, { status })
+  return Response.json(body, { status });
 }
 
+export const GEMINI_MODEL_DEFAUT = "gemini-3.1-flash-lite";
+
 const MODELES_GEMINI_OBSOLETES = new Set([
-  'gemini-1.5-flash',
-  'gemini-1.5-flash-latest',
-  'gemini-1.5-flash-8b',
-  'gemini-1.5-pro',
-])
+  "gemini-1.5-flash",
+  "gemini-1.5-flash-latest",
+  "gemini-1.5-flash-8b",
+  "gemini-1.5-pro",
+  "gemini-2.0-flash",
+]);
 
 /** Lu à l'exécution pour respecter les variables Vercel et ignorer les anciens modèles. */
 export function getGeminiVisionModel(): string {
-  const configure = process.env.GEMINI_MODEL?.trim()
-  const modele = configure || 'gemini-2.0-flash'
+  const configure = process.env.GEMINI_MODEL?.trim();
+  const modele = configure || GEMINI_MODEL_DEFAUT;
   if (MODELES_GEMINI_OBSOLETES.has(modele)) {
-    console.warn(`⚠️ [Gemini] Modèle "${modele}" obsolète — utilisation de gemini-2.0-flash`)
-    return 'gemini-2.0-flash'
+    console.warn(
+      `⚠️ [Gemini] Modèle "${modele}" obsolète — utilisation de ${GEMINI_MODEL_DEFAUT}`,
+    );
+    return GEMINI_MODEL_DEFAUT;
   }
-  return modele
+  return modele;
 }
 
 export const SMC_ANALYSIS_PROMPT = `Tu es un assistant spécialisé en analyse de trades SMC (Smart Money Concepts).
 Analyse ce screenshot TradingView et extrais les informations suivantes en JSON.
-La position est toujours ouverte et visible sur le chart.
+La position peut être ouverte ou récemment fermée/manuelle sur le graphique.
 
 Retourne UNIQUEMENT ce JSON, sans texte supplémentaire :
 {
@@ -42,4 +47,4 @@ Retourne UNIQUEMENT ce JSON, sans texte supplémentaire :
     "sl": 0.0 à 1.0,
     "tp": 0.0 à 1.0
   }
-}`
+}`;
