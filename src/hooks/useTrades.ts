@@ -1,6 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { TradeInsert, TradeWithSteps } from '@/types'
+import {
+  buildStepPayloads,
+  buildTradePayload,
+  computeTradeStatus,
+  type EditStepIds,
+  type FormDataState,
+} from '@/lib/tradeForm'
 
 const QUERY_KEY = ['trades'] as const
 
@@ -73,6 +80,71 @@ export function useDeleteTrade() {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('trades').delete().eq('id', id)
       if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY })
+    },
+  })
+}
+
+interface UpdateTradeInput {
+  tradeId: string
+  formData: FormDataState
+  stepIds: EditStepIds
+  previousStatus: TradeWithSteps['status']
+  preserveBiaisFields?: Record<string, unknown> | null
+}
+
+/** Met à jour un trade existant et ses étapes. */
+export function useUpdateTrade() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      tradeId,
+      formData,
+      stepIds,
+      previousStatus,
+      preserveBiaisFields,
+    }: UpdateTradeInput): Promise<TradeWithSteps> => {
+      const status = computeTradeStatus(formData, previousStatus)
+      const tradePayload = buildTradePayload(formData, status)
+
+      const { data: updatedTrade, error: tradeError } = await supabase
+        .from('trades')
+        .update(tradePayload)
+        .eq('id', tradeId)
+        .select(`*, steps (*, images: step_images (*))`)
+        .single()
+
+      if (tradeError || !updatedTrade) {
+        throw tradeError || new Error('Erreur lors de la mise à jour du trade')
+      }
+
+      const steps = buildStepPayloads(tradeId, formData, stepIds, preserveBiaisFields)
+
+      for (const step of steps) {
+        const { id, ...stepData } = step
+        if (id) {
+          const { error } = await supabase.from('steps').update(stepData).eq('id', id)
+          if (error) throw error
+        } else {
+          const { error } = await supabase.from('steps').insert(stepData)
+          if (error) throw error
+        }
+      }
+
+      const { data: fullTrade, error: refetchError } = await supabase
+        .from('trades')
+        .select(`*, steps (*, images: step_images (*))`)
+        .eq('id', tradeId)
+        .single()
+
+      if (refetchError || !fullTrade) {
+        throw refetchError || new Error('Erreur lors du rechargement du trade')
+      }
+
+      return fullTrade as TradeWithSteps
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY })

@@ -13,6 +13,7 @@ import type { GeminiAnalysis } from '@/hooks/useQuickEntry'
 export function TradeDetail() {
   const isDetailOpen = useUIStore((state) => state.isDetailOpen)
   const closeDetail = useUIStore((state) => state.closeDetail)
+  const openEditTrade = useUIStore((state) => state.openEditTrade)
   const selectedTrade = useUIStore((state) => state.selectedTrade)
   const [lightbox, setLightbox] = useState<string | null>(null)
 
@@ -69,7 +70,7 @@ export function TradeDetail() {
           <span className="text-txt text-xl font-semibold tracking-tight">{selectedTrade.pair}</span>
 
           {/* Tags — wrappent sur mobile */}
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
             <Tag variant={selectedTrade.direction === 'long' ? 'long' : 'short'}>
               {selectedTrade.direction === 'long' ? '↑ Long' : '↓ Short'}
             </Tag>
@@ -78,18 +79,23 @@ export function TradeDetail() {
             {selectedTrade.date_backtested && <Tag>{formatDate(selectedTrade.date_backtested)}</Tag>}
           </div>
 
-          {/* R:R réalisé — à droite */}
-          {selectedTrade.rr_realized != null && (
-            <span className="ml-auto text-win text-xl font-semibold">{formatRR(selectedTrade.rr_realized)}</span>
-          )}
-
-          {/* Bouton fermer desktop */}
-          <button
-            onClick={closeDetail}
-            className="hidden md:block text-txt3 hover:text-txt text-xl leading-none ml-2"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2 ml-auto">
+            {selectedTrade.rr_realized != null && (
+              <span className="text-win text-xl font-semibold">{formatRR(selectedTrade.rr_realized)}</span>
+            )}
+            <button
+              onClick={() => openEditTrade(selectedTrade)}
+              className="px-3 py-1.5 bg-accent text-white rounded-md text-[12px] font-medium hover:bg-accent/90 transition-colors"
+            >
+              Modifier
+            </button>
+            <button
+              onClick={closeDetail}
+              className="hidden md:block text-txt3 hover:text-txt text-xl leading-none"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Body — sections du trade */}
@@ -99,11 +105,7 @@ export function TradeDetail() {
           {isQuickEntry && geminiAnalysis && (
             <QuickEntryBanner
               analysis={geminiAnalysis}
-              onCompleter={() => {
-                // Ferme le détail pour que l'utilisateur puisse éditer le trade
-                // TODO: ouvrir le TradeDrawer en mode édition avec les données pré-remplies
-                closeDetail()
-              }}
+              onCompleter={() => openEditTrade(selectedTrade)}
             />
           )}
 
@@ -164,7 +166,7 @@ export function TradeDetail() {
             <Section title="📝 Review" badge={selectedTrade.emotion ?? undefined}>
               <div className="grid md:grid-cols-2 gap-3">
                 <ReviewCard icon="✅" label="Ce qui a bien marché" text={(review.fields as Record<string, string>)?.good ?? '—'} />
-                <ReviewCard icon="⚠️" label="À améliorer" text={(review.fields as Record<string, string>)?.improve ?? '—'} />
+                <ReviewCard icon="⚠️" label="À améliorer" text={(review.fields as Record<string, string>)?.bad ?? (review.fields as Record<string, string>)?.improve ?? '—'} />
               </div>
             </Section>
           )}

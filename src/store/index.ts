@@ -17,9 +17,11 @@ interface UIState {
   openSidebar: () => void
   closeSidebar: () => void
 
-  // Drawer nouveau trade
+  // Drawer trade (création / édition)
   isNewTradeOpen: boolean
+  editingTrade: TradeWithSteps | null
   openNewTrade: () => void
+  openEditTrade: (trade: TradeWithSteps) => void
   closeNewTrade: () => void
 
   // Détail d'un trade
@@ -41,10 +43,12 @@ export const useUIStore = create<UIState>((set) => ({
   openSidebar: () => set({ isSidebarOpen: true }),
   closeSidebar: () => set({ isSidebarOpen: false }),
 
-  // Drawer nouveau trade
+  // Drawer trade
   isNewTradeOpen: false,
-  openNewTrade: () => set({ isNewTradeOpen: true }),
-  closeNewTrade: () => set({ isNewTradeOpen: false }),
+  editingTrade: null,
+  openNewTrade: () => set({ isNewTradeOpen: true, editingTrade: null }),
+  openEditTrade: (trade) => set({ isNewTradeOpen: true, editingTrade: trade, isDetailOpen: false }),
+  closeNewTrade: () => set({ isNewTradeOpen: false, editingTrade: null }),
 
   // Détail
   isDetailOpen: false,

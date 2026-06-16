@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ComboField } from '@/components/fields/ComboField'
-import type { FormDataState } from './TradeDrawer'
+import type { FormDataState } from '@/lib/tradeForm'
 
 type StepType = 'general' | 'biais' | 'poi' | 'entry' | 'result' | 'custom'
 
