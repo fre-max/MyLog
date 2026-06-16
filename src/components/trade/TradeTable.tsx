@@ -15,71 +15,6 @@ import { SkeletonTableRow } from '@/components/ui/Skeleton'
 import { StatusBadge } from '@/components/trade/StatusBadge'
 import type { TradeWithSteps } from '@/types'
 
-// ─── Définition des colonnes ──────────────────────────────
-
-const col = createColumnHelper<TradeWithSteps>()
-
-const columns = [
-  col.accessor('date_backtested', {
-    header: 'Date',
-    cell: (info) => <span className="text-txt2">{formatDate(info.getValue())}</span>,
-  }),
-  col.accessor('pair', {
-    header: 'Paire',
-    cell: (info) => <span className="text-txt font-medium">{info.getValue()}</span>,
-  }),
-  col.accessor('direction', {
-    header: 'Direction',
-    cell: (info) => (
-      <Badge variant={info.getValue() === 'long' ? 'long' : 'short'}>
-        {info.getValue() === 'long' ? '↑ Long' : '↓ Short'}
-      </Badge>
-    ),
-  }),
-  col.accessor('steps', {
-    header: 'Setup',
-    cell: (info) => {
-      const entryStep = info.getValue().find((s) => s.type === 'entry')
-      return <span className="text-txt2">{entryStep?.title ?? '—'}</span>
-    },
-  }),
-  col.accessor('session', {
-    header: 'Session',
-    cell: (info) => <span className="text-txt2">{info.getValue()}</span>,
-  }),
-  col.accessor('rr_realized', {
-    header: 'R:R',
-    cell: (info) => <span className="text-txt font-medium">{formatRR(info.getValue())}</span>,
-  }),
-  col.accessor('result', {
-    header: 'Résultat',
-    cell: (info) => {
-      const v = info.getValue()
-      if (!v) return <span className="text-txt3">—</span>
-      return <Badge variant={v}>{v === 'win' ? '✓ Win' : v === 'loss' ? '✗ Loss' : '— BE'}</Badge>
-    },
-  }),
-  col.accessor('status', {
-    header: 'Statut',
-    cell: (info) => {
-      // Valeur par défaut 'in_progress' pour les trades créés avant la mise à jour
-      const statut = (info.getValue() || 'in_progress') as 'quick' | 'in_progress' | 'complete'
-      return <StatusBadge status={statut} />
-    },
-  }),
-  col.accessor('steps', {
-    id: 'steps_count',
-    header: 'Étapes',
-    cell: (info) => (
-      <div className="flex gap-1">
-        {info.getValue().map((_, i) => (
-          <div key={i} className="w-1.5 h-1.5 rounded-full bg-accent" />
-        ))}
-      </div>
-    ),
-  }),
-]
-
 // ─── TradeTable ───────────────────────────────────────────
 // Tableau principal des trades avec :
 // - Onglets (Tableau / Calendrier / Courbe)
@@ -90,11 +25,90 @@ const columns = [
 export function TradeTable() {
   const { data: trades = [], isLoading, isError } = useTrades()
   const openDetail = useUIStore((state) => state.openDetail)
+  const openEditTrade = useUIStore((state) => state.openEditTrade)
   const openNewTrade = useUIStore((state) => state.openNewTrade)
   const addToast = useUIStore((state) => state.addToast)
   const filterPair = useFilterStore((state) => state.filterPair)
   const filterResult = useFilterStore((state) => state.filterResult)
   const [sorting, setSorting] = useState<SortingState>([])
+
+  // ─── Définition des colonnes ──────────────────────────────
+  const col = createColumnHelper<TradeWithSteps>()
+
+  const columns = [
+    col.accessor('date_backtested', {
+      header: 'Date',
+      cell: (info) => <span className="text-txt2">{formatDate(info.getValue())}</span>,
+    }),
+    col.accessor('pair', {
+      header: 'Paire',
+      cell: (info) => <span className="text-txt font-medium">{info.getValue()}</span>,
+    }),
+    col.accessor('direction', {
+      header: 'Direction',
+      cell: (info) => (
+        <Badge variant={info.getValue() === 'long' ? 'long' : 'short'}>
+          {info.getValue() === 'long' ? '↑ Long' : '↓ Short'}
+        </Badge>
+      ),
+    }),
+    col.accessor('steps', {
+      header: 'Setup',
+      cell: (info) => {
+        const entryStep = info.getValue().find((s) => s.type === 'entry')
+        return <span className="text-txt2">{entryStep?.title ?? '—'}</span>
+      },
+    }),
+    col.accessor('session', {
+      header: 'Session',
+      cell: (info) => <span className="text-txt2">{info.getValue()}</span>,
+    }),
+    col.accessor('rr_realized', {
+      header: 'R:R',
+      cell: (info) => <span className="text-txt font-medium">{formatRR(info.getValue())}</span>,
+    }),
+    col.accessor('result', {
+      header: 'Résultat',
+      cell: (info) => {
+        const v = info.getValue()
+        if (!v) return <span className="text-txt3">—</span>
+        return <Badge variant={v}>{v === 'win' ? '✓ Win' : v === 'loss' ? '✗ Loss' : '— BE'}</Badge>
+      },
+    }),
+    col.accessor('status', {
+      header: 'Statut',
+      cell: (info) => {
+        const statut = (info.getValue() || 'in_progress') as 'quick' | 'in_progress' | 'complete'
+        return <StatusBadge status={statut} />
+      },
+    }),
+    col.accessor('steps', {
+      id: 'steps_count',
+      header: 'Étapes',
+      cell: (info) => (
+        <div className="flex gap-1">
+          {info.getValue().map((_, i) => (
+            <div key={i} className="w-1.5 h-1.5 rounded-full bg-accent" />
+          ))}
+        </div>
+      ),
+    }),
+    col.display({
+      id: 'actions',
+      header: 'Actions',
+      cell: (info) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            openEditTrade(info.row.original)
+          }}
+          className="px-3 py-1.5 bg-accent text-white rounded-md text-[11.5px] font-medium hover:bg-accent/90 transition-colors"
+        >
+          Modifier
+        </button>
+      ),
+    }),
+  ]
 
   console.log('📊 [TradeTable] Rendu :', { 
     isLoading, 
