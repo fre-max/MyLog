@@ -73,7 +73,7 @@ export function ImageField({ tradeId, stepId, onUpload }: ImageFieldProps) {
       {!preview ? (
         <button
           type="button"
-          onClick={fetchLastImage}
+          onClick={() => fetchLastImage(stepId)}
           disabled={isLoading}
           className="flex items-center gap-2 px-3 py-2 bg-accent/7 border border-accent/20 rounded-md text-[12.5px] text-txt3 hover:border-accent/40 hover:text-accent transition-colors disabled:opacity-50"
         >

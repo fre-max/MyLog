@@ -89,7 +89,12 @@ export function Sidebar() {
         </div>
 
         <div className="mt-auto px-2 pt-4 border-t border-border">
-          <NavItem icon="⚙️" label="Paramètres" />
+          <NavItem 
+            icon="⚙️" 
+            label="Paramètres" 
+            active={location.pathname === '/settings'}
+            onClick={() => naviguerVers('/settings')}
+          />
         </div>
       </aside>
     </>

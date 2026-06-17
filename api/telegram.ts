@@ -315,11 +315,42 @@ export default {
       }
 
       console.log('🚀 [Telegram API] Mode Standard détecté (stockage d\'image simple)')
+      
+      // Si un step_id est fourni en paramètre, attacher l'image à ce step
+      const stepId = url.searchParams.get('step_id')
+      if (stepId) {
+        console.log('📎 [Telegram API] step_id fourni, attachement de l\'image au step :', stepId)
+        
+        if (!supabaseUrl || !supabaseAnonKey) {
+          console.warn('⚠️ [Telegram API] Supabase non configuré, impossible d\'attacher l\'image au step')
+        } else {
+          const authHeader = request.headers.get('authorization')
+          const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+            global: { headers: { Authorization: authHeader || '' } },
+          })
+
+          const { error: imageInsertError } = await supabase
+            .from('step_images')
+            .insert({
+              step_id: stepId,
+              source: 'telegram',
+              url: fileUrl,
+            })
+
+          if (imageInsertError) {
+            console.error('❌ [Telegram API] Erreur lors de l\'enregistrement de l\'image :', imageInsertError)
+          } else {
+            console.log('✅ [Telegram API] Image attachée au step avec succès')
+          }
+        }
+      }
+      
       await acquitterUpdates(token, maxUpdateId)
       return jsonResponse({
         mode: 'standard',
         fileUrl,
         date: message.date,
+        stepId: stepId || null,
       })
     } catch (error: unknown) {
       if (isGeminiQuotaError(error)) {

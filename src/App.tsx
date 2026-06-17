@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import type { Session } from '@supabase/supabase-js'
 import Journal from '@/pages/Journal'
 import Stats from '@/pages/Stats'
+import Settings from '@/pages/Settings'
 import Auth from '@/pages/Auth'
 import { ToastContainer } from '@/components/ui/Toast'
 
@@ -60,6 +61,10 @@ export default function App() {
           <Route
             path="/stats"
             element={session ? <Stats /> : <Navigate to="/auth" replace />}
+          />
+          <Route
+            path="/settings"
+            element={session ? <Settings /> : <Navigate to="/auth" replace />}
           />
 
           {/* Auth — redirige vers / si déjà connecté */}

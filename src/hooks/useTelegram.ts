@@ -48,7 +48,7 @@ export function useTelegram() {
   })
 
   // Appelle /api/telegram et met à jour l'état selon le mode retourné par le serveur
-  const fetchLastMessage = async (): Promise<TelegramState> => {
+  const fetchLastMessage = async (stepId?: string): Promise<TelegramState> => {
     setState((prev) => ({ ...prev, isLoading: true, error: null }))
 
     try {
@@ -60,7 +60,8 @@ export function useTelegram() {
         headers.Authorization = `Bearer ${session.access_token}`
       }
 
-      const res = await fetch('/api/telegram', { headers })
+      const apiUrl = stepId ? `/api/telegram?step_id=${encodeURIComponent(stepId)}` : '/api/telegram'
+      const res = await fetch(apiUrl, { headers })
 
       console.log(`📡 [useTelegram] Statut réponse : ${res.status} ${res.statusText}`)
       const contentType = res.headers.get('content-type')
@@ -119,8 +120,8 @@ export function useTelegram() {
 
   // Méthode de rétrocompatibilité : fetchLastImage (utilisé par ImageField.tsx)
   // Préserve l'ancien comportement en retournant { fileUrl, date }
-  const fetchLastImage = async () => {
-    const etat = await fetchLastMessage()
+  const fetchLastImage = async (stepId?: string) => {
+    const etat = await fetchLastMessage(stepId)
     if (etat.preview) {
       return { fileUrl: etat.preview, date: Date.now() }
     }
