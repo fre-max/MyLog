@@ -48,3 +48,4 @@ api/
 ## Supabase — Tables à créer
 
 Voir `/supabase/schema.sql`
+# MyLog
