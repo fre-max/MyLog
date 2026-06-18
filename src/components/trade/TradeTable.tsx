@@ -8,7 +8,7 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 import { useState, useEffect, useMemo } from 'react'
-import { useTrades } from '@/hooks/useTrades'
+import { useTrades, useDeleteTrade } from '@/hooks/useTrades'
 import { useUIStore, useFilterStore } from '@/store'
 import { formatDate, formatRR, cn } from '@/lib/utils'
 import { SkeletonTableRow } from '@/components/ui/Skeleton'
@@ -24,6 +24,7 @@ import type { TradeWithSteps } from '@/types'
 
 export function TradeTable() {
   const { data: trades = [], isLoading, isError } = useTrades()
+  const { mutateAsync: deleteTrade, isPending: isDeleting } = useDeleteTrade()
   const openDetail = useUIStore((state) => state.openDetail)
   const openEditTrade = useUIStore((state) => state.openEditTrade)
   const openNewTrade = useUIStore((state) => state.openNewTrade)
@@ -97,15 +98,35 @@ export function TradeTable() {
       id: 'actions',
       header: 'Actions',
       cell: (info) => (
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            openEditTrade(info.row.original)
-          }}
-          className="px-3 py-1.5 bg-accent text-white rounded-md text-[11.5px] font-medium hover:bg-accent/90 transition-colors"
-        >
-          Modifier
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              openEditTrade(info.row.original)
+            }}
+            className="px-3 py-1.5 bg-accent text-white rounded-md text-[11.5px] font-medium hover:bg-accent/90 transition-colors"
+          >
+            Modifier
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              if (confirm('Êtes-vous sûr de vouloir supprimer ce trade ?')) {
+                deleteTrade(info.row.original.id)
+                  .then(() => {
+                    addToast('Trade supprimé avec succès', 'success')
+                  })
+                  .catch((err) => {
+                    addToast(err.message || 'Erreur lors de la suppression', 'error')
+                  })
+              }
+            }}
+            disabled={isDeleting}
+            className="px-3 py-1.5 bg-loss/10 text-loss border border-loss/30 rounded-md text-[11.5px] font-medium hover:bg-loss/20 transition-colors disabled:opacity-50"
+          >
+            Supprimer
+          </button>
+        </div>
       ),
     }),
   ]
