@@ -224,7 +224,8 @@ export default {
           global: { headers: { Authorization: authHeader } },
         })
 
-        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        // Caster supabase.auth en any pour bypasser les conflits de types sur Vercel
+        const { data: { user }, error: userError } = await (supabase.auth as any).getUser()
         if (userError || !user) {
           throw new Error('JWT invalide ou utilisateur non authentifié côté Supabase')
         }
