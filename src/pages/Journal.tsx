@@ -10,7 +10,7 @@ import { TradeTable } from '@/components/trade/TradeTable'
 //-----------------------------------
 export default function Journal() {
   return (
-    <AppLayout title="Tous Les Trades Fredy">
+    <AppLayout title="Tous Les Trades Fred">
       <TradeTable />
 
       {/* Drawers — se superposent au contenu */}
